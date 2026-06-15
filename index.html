@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>THE LAST BATTERY</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#000; overflow:hidden; font-family:'Courier New',monospace; touch-action:none; }
+  canvas { display:block; }
+  #ui { position:fixed; top:0; left:0; width:100%; pointer-events:none; z-index:10; }
+  #hud { padding:10px 14px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .hud-item { color:#c00; font-size:13px; font-weight:bold; text-shadow:0 0 8px #900; letter-spacing:1px; }
+  .hud-bar { display:inline-block; width:80px; height:8px; background:#1a0000; border:1px solid #400; vertical-align:middle; margin-left:5px; }
+  .hud-fill { height:100%; transition:width 0.3s; }
+  #objective { position:fixed; bottom:0; left:0; width:100%; text-align:center; padding:8px; color:#8b0000; font-size:12px; letter-spacing:2px; text-shadow:0 0 10px #f00; pointer-events:none; z-index:10; }
+  /* Mobile controls */
+  #mobileControls { position:fixed; bottom:0; left:0; width:100%; display:none; z-index:20; pointer-events:none; }
+  .ctrl-left { position:absolute; bottom:20px; left:10px; display:flex; gap:8px; pointer-events:auto; }
+  .ctrl-right { position:absolute; bottom:20px; right:10px; display:flex; gap:8px; flex-direction:column; align-items:flex-end; pointer-events:auto; }
+  .ctrl-row { display:flex; gap:8px; }
+  .ctrl-btn {
+    width:62px; height:62px; border-radius:50%;
+    background:rgba(100,0,0,0.35); border:2px solid rgba(180,0,0,0.5);
+    color:#c00; font-size:18px; display:flex; align-items:center; justify-content:center;
+    user-select:none; -webkit-user-select:none; pointer-events:auto;
+    text-shadow:0 0 6px #f00; box-shadow:0 0 10px rgba(255,0,0,0.2);
+    font-family:'Courier New',monospace; font-weight:bold;
+  }
+  .ctrl-btn:active { background:rgba(180,0,0,0.5); }
+  #screenOverlay { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:30; }
+  #menuScreen { position:fixed; top:0; left:0; width:100%; height:100%; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; }
+  .menu-btn {
+    margin:7px; padding:12px 40px; background:rgba(100,0,0,0.3);
+    border:1px solid #600; color:#c00; font-size:16px; font-family:'Courier New',monospace;
+    letter-spacing:3px; cursor:pointer; transition:all 0.3s; text-transform:uppercase;
+    text-shadow:0 0 8px #f00;
+  }
+  .menu-btn:hover { background:rgba(180,0,0,0.4); border-color:#a00; box-shadow:0 0 20px rgba(255,0,0,0.3); }
+  #introScreen { position:fixed; top:0; left:0; width:100%; height:100%; z-index:45; background:#000; display:none; align-items:center; justify-content:center; flex-direction:column; }
+  .intro-text { color:#8b0000; font-size:20px; letter-spacing:4px; text-align:center; padding:20px; opacity:0; transition:opacity 1.5s; text-shadow:0 0 15px #f00; }
+  #gameOver { position:fixed; top:0; left:0; width:100%; height:100%; z-index:60; display:none; background:rgba(0,0,0,0.92); align-items:center; justify-content:center; flex-direction:column; }
+  #winScreen { position:fixed; top:0; left:0; width:100%; height:100%; z-index:60; display:none; background:rgba(0,0,0,0.92); align-items:center; justify-content:center; flex-direction:column; }
+  #pauseScreen { position:fixed; top:0; left:0; width:100%; height:100%; z-index:55; display:none; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; flex-direction:column; }
+  @media (max-width:768px) { #mobileControls { display:block; } }
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="ui">
+  <div id="hud">
+    <div class="hud-item">❤ <span id="hpVal">100</span><span class="hud-bar"><span class="hud-fill" id="hpBar" style="width:100%;background:#a00;"></span></span></div>
+    <div class="hud-item">🔦 <span id="batVal">100</span>%<span class="hud-bar"><span class="hud-fill" id="batBar" style="width:100%;background:#880;"></span></span></div>
+    <div class="hud-item">🔫 <span id="ammoVal">0</span></div>
+    <div class="hud-item" id="keyIcon" style="display:none;">🗝 KEY</div>
+  </div>
+</div>
+<div id="objective">⬛ FIND A WAY INSIDE</div>
+
+<!-- Menu Screen -->
+<div id="menuScreen">
+  <canvas id="menuCanvas"></canvas>
+  <div style="position:absolute;text-align:center;">
+    <div id="menuTitle" style="font-size:clamp(28px,7vw,60px);color:#8b0000;letter-spacing:8px;font-weight:bold;text-shadow:0 0 30px #f00,0 0 60px #900;margin-bottom:10px;font-family:'Courier New',monospace;">THE LAST BATTERY</div>
+    <div style="color:#500;font-size:13px;letter-spacing:4px;margin-bottom:40px;font-family:'Courier New',monospace;">NOBODY ESCAPES THIS HOUSE</div>
+    <div id="menuButtons">
+      <button class="menu-btn" id="btnPlay">▶ NEW GAME</button><br>
+      <button class="menu-btn" id="btnContinue">↺ CONTINUE</button><br>
+      <button class="menu-btn" id="btnControls">⌨ CONTROLS</button><br>
+      <button class="menu-btn" id="btnCredits">✦ CREDITS</button>
+    </div>
+    <div id="controlsPanel" style="display:none;color:#600;font-size:13px;letter-spacing:2px;line-height:2;font-family:'Courier New',monospace;">
+      WASD / ARROWS — MOVE<br>SPACE — JUMP<br>Z / X — SHOOT<br>F — FLASHLIGHT<br>ESC — PAUSE<br><br>
+      MOBILE: ON-SCREEN BUTTONS<br><br>
+      <button class="menu-btn" onclick="document.getElementById('controlsPanel').style.display='none';document.getElementById('menuButtons').style.display='block';">BACK</button>
+    </div>
+    <div id="creditsPanel" style="display:none;color:#600;font-size:13px;letter-spacing:2px;line-height:2;font-family:'Courier New',monospace;">
+      THE LAST BATTERY<br>A HORROR PLATFORMER<br><br>
+      INSPIRED BY SURVIVAL HORROR CLASSICS<br><br>
+      MADE WITH PURE HTML5 + CANVAS<br><br>
+      <button class="menu-btn" onclick="document.getElementById('creditsPanel').style.display='none';document.getElementById('menuButtons').style.display='block';">BACK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Intro Screen -->
+<div id="introScreen">
+  <div class="intro-text" id="introLine1">Nobody has escaped this house.</div>
+  <div class="intro-text" id="introLine2" style="margin-top:30px;">You hear something moving in the darkness.</div>
+</div>
+
+<!-- Game Canvas -->
+<canvas id="gameCanvas" style="display:none;"></canvas>
+
+<!-- Screen Overlay for effects -->
+<canvas id="screenOverlay"></canvas>
+
+<!-- Mobile Controls -->
+<div id="mobileControls">
+  <div class="ctrl-left">
+    <button class="ctrl-btn" id="btnLeft">◀</button>
+    <button class="ctrl-btn" id="btnRight">▶</button>
+  </div>
+  <div class="ctrl-right">
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btnFlash" style="width:52px;height:52px;font-size:14px;">🔦</button>
+      <button class="ctrl-btn" id="btnShoot" style="background:rgba(120,0,0,0.4);">🔫</button>
+    </div>
+    <button class="ctrl-btn" id="btnJump" style="width:72px;height:72px;font-size:24px;">▲</button>
+  </div>
+</div>
+
+<!-- Game Over -->
+<div id="gameOver">
+  <div style="color:#8b0000;font-size:40px;letter-spacing:8px;text-shadow:0 0 30px #f00;font-family:'Courier New',monospace;">YOU DIED</div>
+  <div style="color:#500;font-size:14px;letter-spacing:3px;margin:20px;font-family:'Courier New',monospace;" id="deathMsg">The darkness claimed you.</div>
+  <button class="menu-btn" id="btnRetry">TRY AGAIN</button>
+  <button class="menu-btn" id="btnMenu1">MAIN MENU</button>
+</div>
+
+<!-- Win Screen -->
+<div id="winScreen">
+  <div style="color:#8b0000;font-size:30px;letter-spacing:6px;text-shadow:0 0 30px #f00;font-family:'Courier New',monospace;">YOU ESCAPED</div>
+  <div style="color:#500;font-size:14px;letter-spacing:2px;margin:20px;text-align:center;font-family:'Courier New',monospace;">You burst through the gate into the storm.<br>You never looked back.<br><br>THE LAST BATTERY — GOOD ENDING</div>
+  <button class="menu-btn" id="btnMenuWin">MAIN MENU</button>
+</div>
+
+<!-- Pause -->
+<div id="pauseScreen">
+  <div style="color:#8b0000;font-size:30px;letter-spacing:6px;font-family:'Courier New',monospace;">PAUSED</div>
+  <button class="menu-btn" id="btnResume" style="margin-top:30px;">▶ RESUME</button>
+  <button class="menu-btn" id="btnMenu2">MAIN MENU</button>
+</div>
+
+<script>
+// =====================================================
+// THE LAST BATTERY — Complete Horror Platformer
+// =====================================================
+
+const menuCanvas = document.getElementById('menuCanvas');
+const gameCanvas = document.getElementById('gameCanvas');
+const overlayCanvas = document.getElementById('screenOverlay');
+const mctx = menuCanvas.getContext('2d');
+const gctx = gameCanvas.getContext('2d');
+const octx = overlayCanvas.getContext('2d');
+
+let W = window.innerWidth, H = window.innerHeight;
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  menuCanvas.width = W; menuCanvas.height = H;
+  gameCanvas.width = W; gameCanvas.height = H;
+  overlayCanvas.width = W; overlayCanvas.height = H;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// =====================================================
+// AUDIO ENGINE (Web Audio API — no external files)
+// =====================================================
+let audioCtx = null;
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playTone(freq, dur, type='sine', vol=0.08, decay=true) {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    if (decay) gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+  } catch(e){}
+}
+
+function playNoise(dur, vol=0.05, lowFreq=80, hiFreq=600) {
+  if (!audioCtx) return;
+  try {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = (lowFreq + hiFreq) / 2;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    src.start(); src.stop(audioCtx.currentTime + dur);
+  } catch(e){}
+}
+
+function soundGunshot() {
+  playNoise(0.15, 0.3, 200, 4000);
+  playTone(80, 0.3, 'sawtooth', 0.15);
+}
+function soundFootstep() { playNoise(0.08, 0.04, 150, 400); }
+function soundBattery() { playTone(880, 0.3, 'sine', 0.1); playTone(1100, 0.2, 'sine', 0.08); }
+function soundHeartbeat() {
+  playTone(60, 0.12, 'sine', 0.12);
+  setTimeout(() => playTone(50, 0.1, 'sine', 0.1), 150);
+}
+function soundScream() {
+  playTone(800 + Math.random()*400, 0.5, 'sawtooth', 0.12);
+  playNoise(0.6, 0.08, 300, 2000);
+}
+function soundCreak() { playTone(150 + Math.random()*100, 0.4, 'sawtooth', 0.04); }
+function soundThunder() {
+  playNoise(1.5, 0.2, 20, 200);
+  setTimeout(() => playNoise(0.8, 0.12, 20, 100), 300);
+}
+function soundWhisper() {
+  playNoise(1.0, 0.03, 200, 800);
+  setTimeout(() => playNoise(0.8, 0.025, 300, 900), 500);
+}
+function soundPickup() {
+  playTone(440, 0.1, 'sine', 0.08);
+  playTone(660, 0.15, 'sine', 0.08);
+  playTone(880, 0.2, 'sine', 0.06);
+}
+function soundDoor() {
+  playTone(100, 0.3, 'sawtooth', 0.1);
+  playNoise(0.5, 0.06, 50, 200);
+}
+function soundHurt() { playTone(200, 0.3, 'square', 0.15); }
+
+// =====================================================
+// GAME STATE
+// =====================================================
+let gameState = 'menu'; // menu | intro | playing | paused | dead | win
+let frameCount = 0;
+let lastTime = 0;
+
+const TILE = 32;
+const GRAVITY = 0.55;
+const MAX_FALL = 18;
+
+// =====================================================
+// MANSION MAP (Very large, multi-floor)
+// =====================================================
+// Map uses chars: 
+//   # = solid wall/floor
+//   . = air
+//   D = door (solid until key)
+//   L = ladder/climbable
+//   B = battery pickup
+//   A = ammo pickup
+//   G = gun pickup
+//   K = escape key (hidden deep)
+//   E = entrance/exit gate
+//   s = shadow walker spawn
+//   c = crawling woman spawn
+//   t = tall figure spawn
+//   f = basement creature spawn
+//   m = mimic shadow spawn
+//   ~ = trigger zone (lightning / event)
+
+// The mansion: 160 tiles wide, 60 tiles tall
+const MAP_W = 160;
+const MAP_H = 60;
+
+// Generate the map as a flat array
+let mapData = new Array(MAP_W * MAP_H).fill('.');
+
+function setTile(x, y, ch) {
+  if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return;
+  mapData[y * MAP_W + x] = ch;
+}
+function getTile(x, y) {
+  if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return '#';
+  return mapData[y * MAP_W + x];
+}
+
+function fillRect(x1, y1, x2, y2, ch) {
+  for (let y = y1; y <= y2; y++)
+    for (let x = x1; x <= x2; x++)
+      setTile(x, y, ch);
+}
+
+function hLine(y, x1, x2, ch) { for (let x = x1; x <= x2; x++) setTile(x, y, ch); }
+function vLine(x, y1, y2, ch) { for (let y = y1; y <= y2; y++) setTile(x, y, ch); }
+
+function buildMansion() {
+  // Fill all with darkness
+  fillRect(0, 0, MAP_W-1, MAP_H-1, '#');
+  // Carve out rooms and corridors
+
+  // ---- GROUND FLOOR (y 38..47) ----
+  // Entrance hall
+  fillRect(5, 34, 30, 47, '.');
+  hLine(47, 5, 30, '#'); hLine(34, 5, 30, '#');
+  vLine(5, 34, 47, '#'); vLine(30, 34, 47, '#');
+  // Floor of entrance
+  hLine(47, 5, 30, '#');
+  setTile(17, 46, 'E'); // Exit gate
+
+  // Foyer / main hall connecting left->right
+  fillRect(30, 39, 90, 47, '.');
+  hLine(47, 30, 90, '#'); hLine(39, 30, 90, '#');
+
+  // Dining hall
+  fillRect(65, 35, 90, 47, '.');
+  hLine(35, 65, 90, '#');
+
+  // Library (upper ground)
+  fillRect(91, 33, 120, 47, '.');
+  hLine(33, 91, 120, '#'); hLine(47, 91, 120, '#');
+  vLine(91, 33, 47, '#'); vLine(120, 33, 47, '#');
+
+  // Right corridor
+  fillRect(120, 39, 150, 47, '.');
+  hLine(47, 120, 150, '#'); hLine(39, 120, 150, '#');
+
+  // Storage room far right
+  fillRect(140, 34, 155, 47, '.');
+  hLine(34, 140, 155, '#');
+
+  // Internal floors (platforms)
+  hLine(43, 35, 55, '#'); // Dining hall platform
+  hLine(41, 68, 85, '#'); // Library platform lower
+  hLine(37, 95, 110, '#'); // Library shelf platform
+
+  // ---- FIRST FLOOR (y 26..35) ----
+  // Left bedroom corridor
+  fillRect(5, 22, 60, 34, '.');
+  hLine(22, 5, 60, '#'); hLine(34, 5, 60, '#');
+  vLine(5, 22, 34, '#'); vLine(60, 22, 34, '#');
+
+  // Bedroom 1
+  fillRect(8, 23, 25, 33, '.');
+  hLine(23, 8, 25, '#'); vLine(25, 23, 33, '#');
+
+  // Bedroom 2
+  fillRect(28, 23, 48, 33, '.');
+  hLine(23, 28, 48, '#'); vLine(48, 23, 33, '#');
+
+  // Middle hall
+  fillRect(60, 24, 100, 34, '.');
+  hLine(24, 60, 100, '#'); hLine(34, 60, 100, '#');
+
+  // Master bedroom
+  fillRect(80, 22, 110, 33, '.');
+  hLine(22, 80, 110, '#'); vLine(110, 22, 33, '#');
+
+  // Right section first floor
+  fillRect(100, 25, 145, 34, '.');
+  hLine(25, 100, 145, '#'); hLine(34, 100, 145, '#');
+
+  // ---- SECOND FLOOR / ATTIC (y 14..22) ----
+  fillRect(5, 10, 80, 22, '.');
+  hLine(10, 5, 80, '#'); hLine(22, 5, 80, '#');
+  vLine(5, 10, 22, '#'); vLine(80, 10, 22, '#');
+
+  // Secret attic section
+  fillRect(60, 6, 100, 16, '.');
+  hLine(6, 60, 100, '#'); hLine(16, 60, 100, '#');
+  vLine(60, 6, 16, '#'); vLine(100, 6, 16, '#');
+
+  // Attic hidden room (key is here!)
+  fillRect(102, 8, 125, 16, '.');
+  hLine(8, 102, 125, '#'); hLine(16, 102, 125, '#');
+  vLine(102, 8, 16, '#'); vLine(125, 8, 16, '#');
+
+  // ---- BASEMENT (y 48..58) ----
+  fillRect(10, 48, 155, 57, '.');
+  hLine(48, 10, 155, '#'); hLine(57, 10, 155, '#');
+  vLine(10, 48, 57, '#'); vLine(155, 48, 57, '#');
+
+  // Basement chambers
+  vLine(40, 48, 57, '#'); setTile(40, 52, '.'); setTile(40, 53, '.'); // passage
+  vLine(80, 48, 57, '#'); setTile(80, 50, '.'); setTile(80, 51, '.'); setTile(80, 52, '.');
+  vLine(120, 48, 57, '#'); setTile(120, 54, '.'); setTile(120, 55, '.');
+
+  // Generator room (basement right)
+  fillRect(130, 49, 154, 56, '.');
+  hLine(49, 130, 154, '#'); hLine(56, 130, 154, '#');
+
+  // Underground tunnel
+  fillRect(15, 53, 155, 56, '.');
+
+  // ---- SECRET PASSAGES ----
+  // Behind library bookcase
+  fillRect(118, 36, 122, 44, '.');
+  // Passage from basement up through hidden chimney
+  fillRect(72, 30, 75, 47, '.');
+  // Broken hallway connecting second floor
+  fillRect(82, 17, 105, 22, '.');
+  // Hidden tunnel in wall
+  fillRect(12, 14, 15, 34, '.'); // Left vertical secret passage
+
+  // ---- VERTICAL CONNECTIONS (stairs/ladders) ----
+  // Entrance stairs up
+  for (let i=0;i<5;i++) { setTile(26-i, 44-i, '#'); setTile(27-i, 44-i, '.'); }
+  // Main stairs ground -> 1st
+  hLine(38, 50, 58, '#');
+  for (let i=0;i<5;i++) { setTile(52-i, 38-i, '#'); }
+  // 1st -> 2nd floor stairs
+  for (let i=0;i<6;i++) { setTile(20-i, 27-i, '#'); }
+  // Basement stairs
+  for (let i=0;i<5;i++) { setTile(20+i, 47+i, '#'); }
+  for (let i=0;i<5;i++) { setTile(90+i, 47+i, '#'); }
+  // Attic stairs
+  for (let i=0;i<5;i++) { setTile(65-i, 22-i, '#'); }
+  // Hidden attic passage
+  vLine(101, 8, 22, '.'); // hidden chimney
+
+  // ---- LADDERS ----
+  vLine(35, 22, 38, 'L');
+  vLine(55, 34, 39, 'L');
+  vLine(100, 22, 34, 'L');
+  vLine(130, 34, 47, 'L');
+  vLine(18, 47, 52, 'L');
+  vLine(70, 16, 24, 'L');
+
+  // ---- PICKUPS ----
+  // Batteries (scarce)
+  setTile(18, 43, 'B');
+  setTile(75, 40, 'B');
+  setTile(105, 32, 'B');
+  setTile(14, 18, 'B');
+  setTile(88, 11, 'B');
+  setTile(145, 43, 'B');
+  setTile(30, 51, 'B');
+  setTile(110, 54, 'B');
+
+  // Gun (find in dining hall)
+  setTile(72, 44, 'G');
+
+  // Ammo (very rare)
+  setTile(98, 36, 'A');
+  setTile(22, 29, 'A');
+  setTile(140, 43, 'A');
+  setTile(65, 12, 'A');
+  setTile(150, 52, 'A');
+
+  // KEY — deep in attic hidden room
+  setTile(118, 12, 'K');
+
+  // ---- ENEMIES ----
+  // Shadow walkers
+  setTile(40, 46, 's'); setTile(75, 46, 's'); setTile(130, 46, 's');
+  setTile(15, 33, 's'); setTile(95, 33, 's');
+  setTile(25, 21, 's'); setTile(60, 21, 's');
+
+  // Crawling women
+  setTile(50, 43, 'c'); setTile(110, 43, 'c');
+  setTile(30, 30, 'c'); setTile(85, 28, 'c');
+
+  // Tall figures (visible in lightning)
+  setTile(20, 45, 't'); setTile(100, 45, 't'); setTile(140, 45, 't');
+
+  // Basement creatures (fast)
+  setTile(25, 55, 'f'); setTile(60, 55, 'f'); setTile(100, 55, 'f'); setTile(140, 54, 'f');
+
+  // Mimic shadows
+  setTile(55, 32, 'm'); setTile(90, 21, 'm');
+
+  // Lightning triggers
+  setTile(45, 43, '~'); setTile(100, 43, '~'); setTile(20, 21, '~'); setTile(70, 10, '~');
+}
+
+// =====================================================
+// PLAYER
+// =====================================================
+const player = {
+  x: 15 * TILE, y: 44 * TILE,
+  vx: 0, vy: 0,
+  w: 18, h: 28,
+  onGround: false,
+  onLadder: false,
+  health: 100,
+  battery: 100,
+  ammo: 0,
+  hasGun: false,
+  hasKey: false,
+  flashOn: true,
+  dead: false,
+  footTimer: 0,
+  heartTimer: 0,
+  invincible: 0,
+  shootCooldown: 0,
+  recoil: 0,
+  facingRight: true,
+  stepCount: 0
+};
+
+// =====================================================
+// CAMERA
+// =====================================================
+const cam = { x: 0, y: 0, shake: 0, shakeX: 0, shakeY: 0 };
+
+function updateCamera() {
+  const tx = player.x - W/2;
+  const ty = player.y - H/2;
+  cam.x += (tx - cam.x) * 0.08;
+  cam.y += (ty - cam.y) * 0.08;
+  cam.x = Math.max(0, Math.min(cam.x, MAP_W*TILE - W));
+  cam.y = Math.max(0, Math.min(cam.y, MAP_H*TILE - H));
+  if (cam.shake > 0) {
+    cam.shakeX = (Math.random()-0.5)*cam.shake;
+    cam.shakeY = (Math.random()-0.5)*cam.shake;
+    cam.shake *= 0.85;
+    if (cam.shake < 0.3) cam.shake = 0;
+  } else { cam.shakeX = 0; cam.shakeY = 0; }
+}
+
+// =====================================================
+// ENEMIES
+// =====================================================
+const enemies = [];
+const ENEMY_TYPES = {
+  shadow: { name:'Shadow Walker', color:'#1a0020', size:24, speed:0.8, hp:3, dmg:8, sight:8 },
+  crawl:  { name:'Crawling Woman', color:'#1a0010', size:20, speed:1.4, hp:2, dmg:12, sight:6 },
+  tall:   { name:'Tall Figure', color:'#0d0015', size:52, speed:0.5, hp:5, dmg:20, sight:12 },
+  fast:   { name:'Basement Creature', color:'#001a00', size:18, speed:2.4, hp:2, dmg:15, sight:10 },
+  mimic:  { name:'Mimic Shadow', color:'#080808', size:24, speed:1.0, hp:3, dmg:10, sight:7 }
+};
+
+class Enemy {
+  constructor(tx, ty, type) {
+    this.x = tx * TILE + 8;
+    this.y = ty * TILE;
+    this.type = type;
+    this.def = ENEMY_TYPES[type];
+    this.vx = 0; this.vy = 0;
+    this.onGround = false;
+    this.hp = this.def.hp;
+    this.state = 'patrol'; // patrol | chase | attack
+    this.dir = Math.random() > 0.5 ? 1 : -1;
+    this.patrolTimer = 60 + Math.random()*120;
+    this.w = this.def.size; this.h = this.def.size;
+    this.alertTimer = 0;
+    this.flickerAlpha = 1;
+    this.visible = true;
+    this.screamTimer = Math.random() * 300;
+  }
+  update() {
+    // Gravity
+    if (this.type !== 'crawl') {
+      this.vy += GRAVITY;
+      if (this.vy > MAX_FALL) this.vy = MAX_FALL;
+    }
+    // Distance to player
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    const sightRange = this.def.sight * TILE * (player.flashOn ? 1.5 : 0.6);
+
+    // AI state machine
+    if (dist < sightRange && player.battery > 0) {
+      this.state = 'chase';
+      this.alertTimer = 180;
+    }
+    if (this.alertTimer > 0) this.alertTimer--;
+    if (this.alertTimer <= 0) this.state = 'patrol';
+
+    if (this.state === 'chase') {
+      const spd = this.def.speed * (this.type === 'fast' ? 1.5 : 1);
+      this.vx = Math.sign(dx) * spd;
+      // Jump to reach player
+      if (dy < -TILE*1.5 && this.onGround) this.vy = -10;
+    } else {
+      // Patrol
+      this.patrolTimer--;
+      if (this.patrolTimer <= 0) {
+        this.dir *= -1;
+        this.patrolTimer = 80 + Math.random()*120;
+      }
+      this.vx = this.dir * this.def.speed * 0.5;
+    }
+
+    // Crawling woman goes on walls
+    if (this.type === 'crawl') {
+      this.vy = Math.sign(player.y - this.y) * this.def.speed;
+    }
+
+    // Move with collision
+    this.x += this.vx;
+    this.resolveX();
+    this.y += this.vy;
+    this.resolveY();
+
+    // Scream occasionally
+    if (this.type === 'crawl' || this.type === 'fast') {
+      this.screamTimer--;
+      if (this.screamTimer <= 0 && dist < 12*TILE) {
+        soundScream();
+        cam.shake = 4;
+        this.screamTimer = 200 + Math.random()*300;
+      }
+    }
+
+    // Damage player on contact
+    if (this.state === 'chase' && dist < (this.w + player.w)/2 + 8 && player.invincible <= 0) {
+      player.health -= this.def.dmg;
+      player.invincible = 60;
+      cam.shake = 8;
+      soundHurt();
+      addBloodSplat(player.x, player.y);
+    }
+
+    // Flickering tall figure only visible during lightning
+    if (this.type === 'tall') this.visible = lightning > 0;
+    else this.visible = true;
+  }
+
+  resolveX() {
+    const tx1 = Math.floor(this.x / TILE);
+    const tx2 = Math.floor((this.x + this.w - 1) / TILE);
+    const ty1 = Math.floor(this.y / TILE);
+    const ty2 = Math.floor((this.y + this.h - 1) / TILE);
+    for (let ty = ty1; ty <= ty2; ty++) {
+      if (isSolid(tx1, ty) && this.vx < 0) { this.x = (tx1+1)*TILE; this.vx = 0; this.dir *= -1; }
+      if (isSolid(tx2, ty) && this.vx > 0) { this.x = tx2*TILE - this.w; this.vx = 0; this.dir *= -1; }
+    }
+  }
+
+  resolveY() {
+    this.onGround = false;
+    const tx1 = Math.floor(this.x / TILE);
+    const tx2 = Math.floor((this.x + this.w - 1) / TILE);
+    const ty1 = Math.floor(this.y / TILE);
+    const ty2 = Math.floor((this.y + this.h - 1) / TILE);
+    for (let tx = tx1; tx <= tx2; tx++) {
+      if (isSolid(tx, ty1) && this.vy < 0) { this.y = (ty1+1)*TILE; this.vy = 0; }
+      if (isSolid(tx, ty2) && this.vy > 0) { this.y = ty2*TILE - this.h; this.vy = 0; this.onGround = true; }
+    }
+  }
+
+  draw(ctx) {
+    if (!this.visible && this.type !== 'tall') return;
+    // Only draw if in flashlight range or during events
+    const dx = this.x - (cam.x + cam.shakeX) - player.x + cam.x + cam.shakeX;
+    const screenX = this.x - cam.x - cam.shakeX;
+    const screenY = this.y - cam.y - cam.shakeY;
+    if (screenX < -64 || screenX > W+64 || screenY < -64 || screenY > H+64) return;
+
+    // Distance-based visibility (light cone)
+    const pdx = this.x - player.x;
+    const pdy = this.y - player.y;
+    const pdist = Math.sqrt(pdx*pdx+pdy*pdy);
+    const lightRange = player.flashOn ? (player.battery > 0 ? getLightRange() : 40) : 60;
+    let alpha = Math.max(0, 1 - pdist/(lightRange*1.2));
+    if (alpha < 0.05 && this.type !== 'tall') return;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * (this.type === 'tall' ? (lightning > 0 ? 0.7 : 0) : 0.9);
+
+    // Draw enemy shape
+    if (this.type === 'tall') {
+      // Tall silhouette
+      ctx.fillStyle = '#0a0010';
+      ctx.fillRect(screenX, screenY - this.h, this.w, this.h*2);
+      // Glowing eyes
+      if (lightning > 0) {
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(screenX+6, screenY-this.h+8, 5, 4);
+        ctx.fillRect(screenX+13, screenY-this.h+8, 5, 4);
+      }
+    } else if (this.type === 'mimic') {
+      // Looks like player
+      ctx.fillStyle = '#080808';
+      ctx.fillRect(screenX, screenY, player.w, player.h);
+      ctx.fillStyle = '#200020';
+      ctx.fillRect(screenX+4, screenY+2, 10, 12); // "head"
+    } else if (this.type === 'crawl') {
+      ctx.fillStyle = this.def.color;
+      // Crawling shape
+      ctx.fillRect(screenX, screenY+8, this.w*1.5, this.h*0.5);
+      ctx.fillStyle = '#300010';
+      ctx.fillRect(screenX, screenY, 12, 12); // head
+    } else {
+      ctx.fillStyle = this.def.color;
+      ctx.fillRect(screenX, screenY, this.w, this.h);
+      // Red eyes
+      ctx.fillStyle = '#8b0000';
+      ctx.fillRect(screenX+5, screenY+5, 4, 3);
+      ctx.fillRect(screenX+this.w-9, screenY+5, 4, 3);
+    }
+    ctx.restore();
+  }
+}
+
+// =====================================================
+// PARTICLES & EFFECTS
+// =====================================================
+const particles = [];
+const bloodSplats = [];
+const dustParticles = [];
+let lightning = 0;
+let lightningTimer = 0;
+let glitchTimer = 0;
+let ghostAlpha = 0;
+let ghostX = 0, ghostY = 0;
+
+function addBloodSplat(x, y) {
+  for (let i = 0; i < 8; i++) {
+    bloodSplats.push({
+      x: x + (Math.random()-0.5)*20,
+      y: y + (Math.random()-0.5)*10,
+      r: 2 + Math.random()*5,
+      life: 1.0, decay: 0.002
+    });
+  }
+}
+
+function addMuzzleFlash(x, y) {
+  for (let i = 0; i < 5; i++) {
+    particles.push({
+      x, y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*4,
+      r: 2+Math.random()*4, life: 1, decay: 0.15, color: '#ffaa00'
+    });
+  }
+}
+
+function initDust() {
+  for (let i = 0; i < 40; i++) {
+    dustParticles.push({
+      x: Math.random()*MAP_W*TILE,
+      y: Math.random()*MAP_H*TILE,
+      vx: (Math.random()-0.5)*0.3,
+      vy: -0.1 - Math.random()*0.2,
+      r: 0.5+Math.random()*1.5,
+      alpha: Math.random()*0.3
+    });
+  }
+}
+
+// =====================================================
+// BULLETS
+// =====================================================
+const bullets = [];
+class Bullet {
+  constructor(x, y, dir) {
+    this.x = x; this.y = y;
+    this.vx = dir * 14; this.vy = 0;
+    this.r = 3; this.life = 80;
+    this.hit = false;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy; this.life--;
+    const tx = Math.floor(this.x/TILE), ty = Math.floor(this.y/TILE);
+    if (isSolid(tx,ty)) { this.hit = true; return; }
+    for (let e of enemies) {
+      if (!e.hp) continue;
+      if (Math.abs(this.x-e.x-e.w/2)<e.w/2+4 && Math.abs(this.y-e.y-e.h/2)<e.h/2+4) {
+        e.hp--;
+        this.hit = true;
+        cam.shake = 3;
+        addBloodSplat(e.x, e.y);
+        if (e.hp <= 0) e.hp = 0;
+        break;
+      }
+    }
+  }
+  draw(ctx) {
+    const sx = this.x - cam.x - cam.shakeX;
+    const sy = this.y - cam.y - cam.shakeY;
+    ctx.save();
+    ctx.fillStyle = '#ffaa00';
+    ctx.shadowColor = '#ff6600';
+    ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(sx, sy, this.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+// =====================================================
+// PICKUPS & ITEMS
+// =====================================================
+const pickups = [];
+class Pickup {
+  constructor(tx, ty, type) {
+    this.x = tx*TILE + 8; this.y = ty*TILE + 8;
+    this.type = type; this.taken = false;
+    this.bob = Math.random()*Math.PI*2;
+  }
+  update() { this.bob += 0.06; }
+  draw(ctx) {
+    if (this.taken) return;
+    const sx = this.x - cam.x - cam.shakeX;
+    const sy = this.y - cam.y - cam.shakeY + Math.sin(this.bob)*4;
+    // Visible check
+    const pdx = this.x - player.x;
+    const pdy = this.y - player.y;
+    const pdist = Math.sqrt(pdx*pdx+pdy*pdy);
+    if (pdist > getLightRange()*1.5) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - pdist/(getLightRange()*1.3));
+    if (this.type==='B') { ctx.fillStyle='#aaaa00'; ctx.font='bold 18px monospace'; ctx.fillText('🔋',sx-8,sy+8); }
+    else if (this.type==='G') { ctx.fillStyle='#888'; ctx.font='bold 18px monospace'; ctx.fillText('🔫',sx-8,sy+8); }
+    else if (this.type==='A') { ctx.fillStyle='#aa8800'; ctx.font='bold 16px monospace'; ctx.fillText('◉',sx-6,sy+6); }
+    else if (this.type==='K') {
+      ctx.shadowColor='#ff0000'; ctx.shadowBlur=20;
+      ctx.fillStyle='#ffcc00'; ctx.font='bold 22px monospace'; ctx.fillText('🗝',sx-10,sy+10);
+    }
+    ctx.restore();
+  }
+}
+
+// =====================================================
+// MAP HELPERS
+// =====================================================
+function isSolid(tx, ty) {
+  const ch = getTile(tx, ty);
+  return ch === '#' || ch === 'D';
+}
+function isLadder(tx, ty) { return getTile(tx, ty) === 'L'; }
+
+// =====================================================
+// OBJECTIVES
+// =====================================================
+const OBJECTIVES = [
+  'Find your way inside',
+  'Restore power — find the generator',
+  'Search the basement',
+  'Find the mansion key',
+  'Escape the mansion'
+];
+let objectiveIdx = 0;
+function setObjective(i) {
+  objectiveIdx = i;
+  document.getElementById('objective').textContent = '⬛ ' + OBJECTIVES[i].toUpperCase();
+}
+
+// =====================================================
+// LIGHT SYSTEM
+// =====================================================
+function getLightRange() {
+  if (!player.flashOn || player.battery <= 0) return 45;
+  const b = player.battery;
+  if (b > 50) return 220;
+  if (b > 25) return 150;
+  if (b > 10) return 100;
+  return 60;
+}
+
+// Flashlight flicker seed
+let flickerPhase = 0;
+function getFlickerAlpha() {
+  flickerPhase += 0.15;
+  if (!player.flashOn || player.battery <= 0) return 0;
+  if (player.battery > 25) return 1;
+  if (player.battery > 10) return 0.6 + Math.sin(flickerPhase*3)*0.4;
+  return Math.random() > 0.7 ? 0.9 : 0.05;
+}
+
+// =====================================================
+// HORROR EVENTS
+// =====================================================
+let horrorEventTimer = 200;
+const horrorEvents = [
+  () => { soundCreak(); addScreenFlash(0.2, '#8b0000'); },
+  () => { soundScream(); cam.shake = 5; addScreenFlash(0.3, '#500'); },
+  () => { soundDoor(); },
+  () => { soundWhisper(); addScreenFlash(0.1, '#200020'); },
+  () => { ghostAlpha = 0.7; ghostX = player.x + (Math.random()-0.5)*200; ghostY = player.y - 100; setTimeout(()=>ghostAlpha=0,800); },
+  () => { glitchTimer = 20; },
+  () => { lightning = 10; lightningTimer = 30; soundThunder(); addScreenFlash(0.6, '#aac'); }
+];
+
+let screenFlashAlpha = 0;
+let screenFlashColor = '#fff';
+function addScreenFlash(alpha, color) { screenFlashAlpha = alpha; screenFlashColor = color; }
+
+// =====================================================
+// PLAYER PHYSICS
+// =====================================================
+function updatePlayer(dt) {
+  if (player.dead) return;
+  const k = keys;
+
+  // Horizontal movement
+  let moveX = 0;
+  if (k.left || touches.left) moveX = -1;
+  if (k.right || touches.right) moveX = 1;
+  player.facingRight = moveX >= 0 ? (moveX > 0 ? true : player.facingRight) : false;
+
+  player.vx = moveX * 3.5;
+  if (player.recoil > 0) { player.vx -= (player.facingRight ? 1 : -1) * player.recoil; player.recoil *= 0.8; }
+
+  // Check if on ladder
+  const midTx = Math.floor((player.x + player.w/2) / TILE);
+  const midTy = Math.floor((player.y + player.h/2) / TILE);
+  player.onLadder = isLadder(midTx, midTy);
+
+  if (player.onLadder) {
+    player.vy = 0;
+    if (k.up || k.jump || touches.jump) player.vy = -2.5;
+    if (k.down) player.vy = 2.5;
+  } else {
+    // Gravity
+    player.vy += GRAVITY;
+    if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+  }
+
+  // Jump
+  if ((k.jump || touches.jump) && player.onGround) {
+    player.vy = -11;
+    player.onGround = false;
+    touches.jump = false;
+  }
+
+  // Apply movement
+  player.x += player.vx;
+  resolvePlayerX();
+  player.y += player.vy;
+  resolvePlayerY();
+
+  // Footstep sounds
+  if (Math.abs(player.vx) > 0.5 && player.onGround) {
+    player.footTimer++;
+    if (player.footTimer >= 22) { soundFootstep(); player.footTimer = 0; player.stepCount++; }
+  }
+
+  // Battery drain
+  if (player.flashOn && player.battery > 0) {
+    player.battery -= 0.012;
+    if (player.battery < 0) player.battery = 0;
+  }
+
+  // Heartbeat when low health
+  player.heartTimer++;
+  if (player.health < 40 && player.heartTimer >= 60) {
+    soundHeartbeat();
+    player.heartTimer = 0;
+  }
+  if (player.health <= 0) { player.dead = true; triggerDeath(); }
+
+  // Invincibility frames
+  if (player.invincible > 0) player.invincible--;
+  if (player.shootCooldown > 0) player.shootCooldown--;
+
+  // Shoot
+  if ((k.shoot || touches.shoot) && player.hasGun && player.ammo > 0 && player.shootCooldown <= 0) {
+    shoot();
+    touches.shoot = false;
+  }
+  k.shoot = false;
+
+  // Flashlight toggle
+  if (k.flash && !k.flashPrev) {
+    player.flashOn = !player.flashOn;
+    initAudio();
+  }
+  k.flashPrev = k.flash;
+  if (touches.flash) { player.flashOn = !player.flashOn; touches.flash = false; }
+
+  // Pickup check
+  for (let p of pickups) {
+    if (p.taken) continue;
+    if (Math.abs(p.x - player.x) < TILE && Math.abs(p.y - player.y) < TILE) {
+      p.taken = true;
+      if (p.type === 'B') { player.battery = Math.min(100, player.battery + 40); soundBattery(); }
+      else if (p.type === 'G') { player.hasGun = true; player.ammo = 6; soundPickup(); setObjective(1); }
+      else if (p.type === 'A') { player.ammo += 3; soundPickup(); }
+      else if (p.type === 'K') {
+        player.hasKey = true; soundPickup(); soundBattery();
+        document.getElementById('keyIcon').style.display = 'inline';
+        setObjective(4);
+        cam.shake = 10;
+        addScreenFlash(0.5, '#880000');
+      }
+    }
+  }
+
+  // Horror events
+  horrorEventTimer--;
+  if (horrorEventTimer <= 0) {
+    const evt = horrorEvents[Math.floor(Math.random()*horrorEvents.length)];
+    evt();
+    horrorEventTimer = 150 + Math.random()*350;
+  }
+
+  // Lightning
+  if (lightning > 0) lightning--;
+  if (lightningTimer > 0) lightningTimer--;
+
+  // Glitch
+  if (glitchTimer > 0) glitchTimer--;
+
+  // Screen flash decay
+  if (screenFlashAlpha > 0) screenFlashAlpha -= 0.03;
+  if (ghostAlpha > 0) ghostAlpha -= 0.015;
+
+  // Objective progress
+  if (objectiveIdx === 0 && player.x > 30*TILE) setObjective(1);
+  if (objectiveIdx === 1 && player.hasGun) setObjective(2);
+  if (objectiveIdx === 2 && player.y > 48*TILE) setObjective(3);
+  if (objectiveIdx === 3 && player.hasKey) setObjective(4);
+
+  // Win check — player at exit with key
+  if (player.hasKey && Math.abs(player.x - 17*TILE) < TILE*2 && Math.abs(player.y - 46*TILE) < TILE*2) {
+    triggerWin();
+  }
+}
+
+function shoot() {
+  if (!audioCtx) initAudio();
+  player.ammo--;
+  soundGunshot();
+  addMuzzleFlash(player.x + (player.facingRight ? 24 : -8), player.y + 12);
+  player.recoil = 4;
+  cam.shake = 5;
+  bullets.push(new Bullet(player.x + (player.facingRight ? 24 : -8), player.y + 12, player.facingRight ? 1 : -1));
+  player.shootCooldown = 25;
+  updateHUD();
+}
+
+function resolvePlayerX() {
+  const tx1 = Math.floor(player.x / TILE);
+  const tx2 = Math.floor((player.x + player.w - 1) / TILE);
+  const ty1 = Math.floor(player.y / TILE);
+  const ty2 = Math.floor((player.y + player.h - 1) / TILE);
+  for (let ty = ty1; ty <= ty2; ty++) {
+    if (isSolid(tx1, ty) && player.vx < 0) { player.x = (tx1+1)*TILE; player.vx = 0; }
+    if (isSolid(tx2, ty) && player.vx > 0) { player.x = tx2*TILE - player.w; player.vx = 0; }
+  }
+}
+
+function resolvePlayerY() {
+  player.onGround = false;
+  const tx1 = Math.floor(player.x / TILE);
+  const tx2 = Math.floor((player.x + player.w - 1) / TILE);
+  const ty1 = Math.floor(player.y / TILE);
+  const ty2 = Math.floor((player.y + player.h - 1) / TILE);
+  for (let tx = tx1; tx <= tx2; tx++) {
+    if (isSolid(tx, ty1) && player.vy < 0) { player.y = (ty1+1)*TILE; player.vy = 0; }
+    if (isSolid(tx, ty2) && player.vy > 0) { player.y = ty2*TILE - player.h; player.vy = 0; player.onGround = true; }
+  }
+}
+
+// =====================================================
+// HUD UPDATE
+// =====================================================
+function updateHUD() {
+  document.getElementById('hpVal').textContent = Math.max(0, Math.floor(player.health));
+  document.getElementById('hpBar').style.width = Math.max(0, player.health) + '%';
+  document.getElementById('batVal').textContent = Math.max(0, Math.floor(player.battery));
+  document.getElementById('batBar').style.width = Math.max(0, player.battery) + '%';
+  const batFill = document.getElementById('batBar');
+  batFill.style.background = player.battery > 50 ? '#888800' : player.battery > 25 ? '#665500' : player.battery > 10 ? '#443300' : '#220000';
+  document.getElementById('ammoVal').textContent = player.hasGun ? player.ammo : '-';
+}
+
+// =====================================================
+// RENDERING
+// =====================================================
+
+// Tile color scheme (dark horror)
+const TILE_COLORS = {
+  '#': null, // drawn specially
+  'L': '#1a0d0d',
+};
+
+function drawMap(ctx) {
+  const startX = Math.floor(cam.x / TILE) - 1;
+  const startY = Math.floor(cam.y / TILE) - 1;
+  const endX = Math.ceil((cam.x + W) / TILE) + 1;
+  const endY = Math.ceil((cam.y + H) / TILE) + 1;
+
+  for (let ty = Math.max(0, startY); ty <= Math.min(MAP_H-1, endY); ty++) {
+    for (let tx = Math.max(0, startX); tx <= Math.min(MAP_W-1, endX); tx++) {
+      const ch = getTile(tx, ty);
+      const sx = tx*TILE - cam.x - cam.shakeX;
+      const sy = ty*TILE - cam.y - cam.shakeY;
+
+      // Distance-based darkness
+      const pdx = tx*TILE + TILE/2 - player.x;
+      const pdy = ty*TILE + TILE/2 - player.y;
+      const pdist = Math.sqrt(pdx*pdx+pdy*pdy);
+      const lrange = getLightRange();
+      const lightAlpha = Math.max(0, 1 - pdist/lrange);
+
+      if (ch === '#') {
+        // Wall with texture
+        const wallDark = Math.max(0, lightAlpha * 0.7);
+        ctx.fillStyle = `rgb(${Math.floor(wallDark*28)},${Math.floor(wallDark*8)},${Math.floor(wallDark*8)})`;
+        ctx.fillRect(sx, sy, TILE, TILE);
+        // Brick lines
+        if (lightAlpha > 0.1) {
+          ctx.strokeStyle = `rgba(60,20,20,${lightAlpha*0.4})`;
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(sx+1, sy+1, TILE-2, TILE-2);
+        }
+      } else if (ch === 'L') {
+        ctx.fillStyle = `rgba(40,20,10,${lightAlpha*0.8})`;
+        ctx.fillRect(sx+TILE/2-2, sy, 4, TILE);
+        ctx.fillStyle = `rgba(30,15,5,${lightAlpha*0.6})`;
+        ctx.fillRect(sx+4, sy+8, TILE-8, 4);
+        ctx.fillRect(sx+4, sy+20, TILE-8, 4);
+      } else if (ch === 'E') {
+        // Exit gate
+        ctx.fillStyle = lightAlpha > 0.1 ? `rgba(80,40,0,${lightAlpha})` : '#000';
+        ctx.fillRect(sx, sy, TILE, TILE);
+        if (lightAlpha > 0.1) {
+          ctx.strokeStyle = `rgba(120,60,0,${lightAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(sx+2, sy+2, TILE-4, TILE-4);
+        }
+      }
+    }
+  }
+}
+
+function drawPlayer(ctx) {
+  const sx = player.x - cam.x - cam.shakeX;
+  const sy = player.y - cam.y - cam.shakeY;
+  const flicker = player.invincible > 0 && Math.floor(frameCount/4)%2 === 0;
+  if (flicker) return;
+
+  ctx.save();
+  // Body
+  ctx.fillStyle = '#1a0a0a';
+  ctx.fillRect(sx, sy, player.w, player.h);
+  // Head
+  ctx.fillStyle = '#2a1010';
+  ctx.fillRect(sx+2, sy, 14, 12);
+  // Eyes (tiny)
+  ctx.fillStyle = '#660000';
+  ctx.fillRect(sx+5, sy+4, 3, 2);
+  ctx.fillRect(sx+10, sy+4, 3, 2);
+  // Flashlight beam direction
+  if (player.flashOn && player.battery > 0) {
+    const flickAlpha = getFlickerAlpha();
+    const beamX = player.facingRight ? sx+player.w : sx;
+    ctx.globalAlpha = flickAlpha * 0.15;
+    const grad = ctx.createConicalGradient ? null : null;
+    ctx.fillStyle = '#ffeecc';
+    ctx.beginPath();
+    ctx.moveTo(beamX, sy+8);
+    const bw = player.facingRight ? 120 : -120;
+    ctx.lineTo(beamX+bw, sy-30);
+    ctx.lineTo(beamX+bw, sy+40);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawLightOverlay(ctx) {
+  // Full darkness overlay with "hole" for flashlight
+  ctx.save();
+  const flickAlpha = getFlickerAlpha();
+  const lrange = getLightRange();
+  const px = player.x - cam.x - cam.shakeX + player.w/2;
+  const py = player.y - cam.y - cam.shakeY + player.h/2;
+
+  // Dark overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.96)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Flashlight cone (destination: lighter area)
+  if (player.flashOn && player.battery > 0 && flickAlpha > 0.05) {
+    ctx.globalCompositeOperation = 'destination-out';
+    // Ambient glow around player
+    const ambGrad = ctx.createRadialGradient(px, py, 0, px, py, 80);
+    ambGrad.addColorStop(0, `rgba(0,0,0,${0.7*flickAlpha})`);
+    ambGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ambGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Directional beam
+    const dir = player.facingRight ? 0 : Math.PI;
+    const coneAngle = 0.6;
+    const bx = px + (player.facingRight ? 10 : -10);
+    const by = py;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.arc(bx, by, lrange, dir - coneAngle, dir + coneAngle);
+    ctx.closePath();
+    const bGrad = ctx.createRadialGradient(bx, by, 0, bx, by, lrange);
+    bGrad.addColorStop(0, `rgba(0,0,0,${flickAlpha})`);
+    bGrad.addColorStop(0.5, `rgba(0,0,0,${flickAlpha*0.6})`);
+    bGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bGrad;
+    ctx.fill();
+  } else if (player.battery <= 0) {
+    // Dead battery — brief random flashes only
+    if (Math.random() < 0.04) {
+      ctx.globalCompositeOperation = 'destination-out';
+      const ambGrad = ctx.createRadialGradient(px, py, 0, px, py, 50);
+      ambGrad.addColorStop(0, 'rgba(0,0,0,0.5)');
+      ambGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = ambGrad;
+      ctx.fillRect(0,0,W,H);
+    }
+  } else {
+    // Flashlight off — tiny ambient
+    ctx.globalCompositeOperation = 'destination-out';
+    const ambGrad = ctx.createRadialGradient(px, py, 0, px, py, 45);
+    ambGrad.addColorStop(0, 'rgba(0,0,0,0.15)');
+    ambGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ambGrad;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // Lightning flash
+  if (lightning > 0) {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = `rgba(0,0,0,${lightning*0.06})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  ctx.restore();
+}
+
+function drawParticles(ctx) {
+  for (let i = particles.length-1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    const sx = p.x - cam.x - cam.shakeX;
+    const sy = p.y - cam.y - cam.shakeY;
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawBloodSplats(ctx) {
+  for (let i = bloodSplats.length-1; i >= 0; i--) {
+    const s = bloodSplats[i];
+    s.life -= s.decay;
+    if (s.life <= 0) { bloodSplats.splice(i,1); continue; }
+    const sx = s.x - cam.x - cam.shakeX;
+    const sy = s.y - cam.y - cam.shakeY;
+    // Light range check
+    const pdx = s.x - player.x, pdy = s.y - player.y;
+    if (Math.sqrt(pdx*pdx+pdy*pdy) > getLightRange()*1.2) continue;
+    ctx.save();
+    ctx.globalAlpha = s.life * 0.7;
+    ctx.fillStyle = '#660000';
+    ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawDust(ctx) {
+  for (let d of dustParticles) {
+    // Move relative to camera
+    d.x += d.vx; d.y += d.vy;
+    // Wrap around player area
+    if (d.x < cam.x - TILE) d.x = cam.x + W + TILE;
+    if (d.x > cam.x + W + TILE) d.x = cam.x - TILE;
+    if (d.y < cam.y - TILE) d.y = cam.y + H/2;
+    if (d.y > cam.y + H + TILE) d.y = cam.y - TILE;
+
+    const pdx = d.x - player.x, pdy = d.y - player.y;
+    const pdist = Math.sqrt(pdx*pdx+pdy*pdy);
+    if (pdist > getLightRange()) continue;
+    const sx = d.x - cam.x - cam.shakeX;
+    const sy = d.y - cam.y - cam.shakeY;
+    ctx.save();
+    ctx.globalAlpha = d.alpha * (1 - pdist/getLightRange());
+    ctx.fillStyle = '#888866';
+    ctx.beginPath(); ctx.arc(sx, sy, d.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawGhost(ctx) {
+  if (ghostAlpha <= 0) return;
+  const sx = ghostX - cam.x - cam.shakeX;
+  const sy = ghostY - cam.y - cam.shakeY;
+  ctx.save();
+  ctx.globalAlpha = ghostAlpha * 0.4;
+  ctx.fillStyle = '#aaaacc';
+  ctx.fillRect(sx, sy, 20, 35);
+  ctx.restore();
+}
+
+function drawFog(ctx) {
+  // Floating fog wisps
+  const t = frameCount * 0.005;
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  for (let i = 0; i < 5; i++) {
+    const fx = (Math.sin(t*0.7+i)*300 + player.x - cam.x + W/2) % W;
+    const fy = (Math.cos(t*0.5+i*1.3)*150 + H/2);
+    const fr = 80 + Math.sin(t+i)*40;
+    const fog = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+    fog.addColorStop(0, 'rgba(180,180,200,1)');
+    fog.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = fog;
+    ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// =====================================================
+// SCREEN OVERLAY EFFECTS
+// =====================================================
+function drawOverlayEffects() {
+  octx.clearRect(0, 0, W, H);
+
+  // Screen flash
+  if (screenFlashAlpha > 0) {
+    octx.fillStyle = screenFlashColor;
+    octx.globalAlpha = screenFlashAlpha;
+    octx.fillRect(0, 0, W, H);
+    octx.globalAlpha = 1;
+  }
+
+  // Glitch effect
+  if (glitchTimer > 0) {
+    octx.save();
+    for (let i = 0; i < 4; i++) {
+      const gy = Math.random()*H;
+      const gh = 2 + Math.random()*8;
+      const gx = (Math.random()-0.5)*20;
+      octx.drawImage(gameCanvas, 0, gy, W, gh, gx, gy, W, gh);
+    }
+    octx.globalAlpha = 0.15;
+    octx.fillStyle = '#ff0000';
+    octx.fillRect(0, 0, W, H);
+    octx.restore();
+  }
+
+  // Vignette
+  const vig = octx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.8);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.7)');
+  octx.globalAlpha = 1;
+  octx.fillStyle = vig;
+  octx.fillRect(0, 0, W, H);
+
+  // Health low — red pulse
+  if (player.health < 30 && gameState === 'playing') {
+    const pulse = (Math.sin(frameCount*0.08)*0.5+0.5)*0.3;
+    octx.fillStyle = `rgba(120,0,0,${pulse})`;
+    octx.fillRect(0, 0, W, H);
+  }
+
+  // Lightning flash on overlay
+  if (lightning > 8) {
+    octx.fillStyle = `rgba(200,200,255,${(lightning-8)*0.05})`;
+    octx.fillRect(0, 0, W, H);
+  }
+
+  // Scan lines (horror feel)
+  octx.globalAlpha = 0.04;
+  octx.fillStyle = '#000';
+  for (let y = 0; y < H; y += 2) octx.fillRect(0, y, W, 1);
+  octx.globalAlpha = 1;
+}
+
+// =====================================================
+// GAME LOOP
+// =====================================================
+function gameLoop(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = Math.min((ts - lastTime)/16.7, 3);
+  lastTime = ts;
+  frameCount++;
+
+  if (gameState === 'playing') {
+    gctx.clearRect(0, 0, W, H);
+    gctx.fillStyle = '#010001';
+    gctx.fillRect(0, 0, W, H);
+
+    updatePlayer(dt);
+    updateCamera();
+
+    // Update enemies
+    for (let i = enemies.length-1; i >= 0; i--) {
+      if (enemies[i].hp <= 0) { enemies.splice(i,1); continue; }
+      enemies[i].update();
+    }
+
+    // Update bullets
+    for (let i = bullets.length-1; i >= 0; i--) {
+      bullets[i].update();
+      if (bullets[i].hit || bullets[i].life <= 0) bullets.splice(i,1);
+    }
+
+    // Update pickups
+    for (let p of pickups) p.update();
+
+    // Draw world
+    drawMap(gctx);
+    drawBloodSplats(gctx);
+    drawDust(gctx);
+    for (let e of enemies) e.draw(gctx);
+    for (let p of pickups) p.draw(gctx);
+    for (let b of bullets) b.draw(gctx);
+    drawPlayer(gctx);
+    drawParticles(gctx);
+    drawGhost(gctx);
+    drawFog(gctx);
+    // Lighting overlay (must come after everything drawn)
+    drawLightOverlay(gctx);
+
+    drawOverlayEffects();
+    updateHUD();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// =====================================================
+// MENU ANIMATION
+// =====================================================
+let menuParticles = [];
+for (let i=0; i<30; i++) {
+  menuParticles.push({
+    x: Math.random()*2000, y: Math.random()*1000,
+    vx: (Math.random()-0.5)*0.4, vy: -0.2-Math.random()*0.5,
+    r: Math.random()*2, alpha: Math.random()*0.4
+  });
+}
+let menuBlood = [];
+for (let i=0; i<8; i++) {
+  menuBlood.push({ x: 50+Math.random()*900/1000, len: 10+Math.random()*80, speed: 0.3+Math.random()*0.5, y: 0 });
+}
+let menuLightning = 0;
+let menuLightningTimer = 0;
+
+function drawMenuBackground() {
+  mctx.fillStyle = '#000';
+  mctx.fillRect(0, 0, W, H);
+
+  // Moving shadows
+  const t = Date.now()*0.0003;
+  for (let i=0; i<4; i++) {
+    const sx = W*0.5 + Math.sin(t*0.7+i*1.5)*W*0.4;
+    const sy = H*0.5 + Math.cos(t*0.5+i*1.2)*H*0.3;
+    const grad = mctx.createRadialGradient(sx,sy,0,sx,sy,200+Math.sin(t+i)*50);
+    grad.addColorStop(0,'rgba(60,0,0,0.08)');
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    mctx.fillStyle=grad; mctx.fillRect(0,0,W,H);
+  }
+
+  // Blood drips
+  for (let b of menuBlood) {
+    b.y += b.speed;
+    if (b.y > H*0.5) b.y = 0;
+    const bx = b.x * W;
+    mctx.fillStyle = '#6b0000';
+    mctx.fillRect(bx-2, 0, 4, b.y);
+    mctx.beginPath();
+    mctx.arc(bx, b.y, 5+Math.sin(t*2+b.x)*2, 0, Math.PI*2);
+    mctx.fillStyle='#8b0000'; mctx.fill();
+  }
+
+  // Dust
+  for (let p of menuParticles) {
+    p.x += p.vx; p.y += p.vy;
+    if (p.y < 0) { p.y = H+10; p.x = Math.random()*W; }
+    if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+    mctx.save();
+    mctx.globalAlpha = p.alpha;
+    mctx.fillStyle='#556';
+    mctx.beginPath(); mctx.arc(p.x, p.y, p.r, 0, Math.PI*2); mctx.fill();
+    mctx.restore();
+  }
+
+  // Lightning
+  menuLightningTimer--;
+  if (menuLightningTimer <= 0) {
+    menuLightning = 8;
+    menuLightningTimer = 200+Math.random()*400;
+  }
+  if (menuLightning > 0) {
+    mctx.fillStyle = `rgba(150,150,200,${menuLightning*0.03})`;
+    mctx.fillRect(0,0,W,H);
+    menuLightning--;
+  }
+
+  // Fog wisps
+  const fogT = Date.now()*0.0005;
+  mctx.save();
+  mctx.globalAlpha = 0.06;
+  for (let i=0; i<4; i++) {
+    const fx = W/2 + Math.sin(fogT+i)*300;
+    const fy = H*0.7 + Math.cos(fogT*0.7+i)*100;
+    const fg = mctx.createRadialGradient(fx,fy,0,fx,fy,150);
+    fg.addColorStop(0,'rgba(100,100,120,1)');
+    fg.addColorStop(1,'rgba(0,0,0,0)');
+    mctx.fillStyle=fg;
+    mctx.beginPath(); mctx.arc(fx,fy,150,0,Math.PI*2); mctx.fill();
+  }
+  mctx.restore();
+
+  // Title flicker
+  const titleEl = document.getElementById('menuTitle');
+  const flickOff = Math.random() > 0.97;
+  titleEl.style.opacity = flickOff ? '0.1' : '1';
+  titleEl.style.textShadow = flickOff ? 'none' : `0 0 ${20+Math.sin(Date.now()*0.003)*10}px #f00, 0 0 60px #900`;
+
+  // Vignette
+  const vig = mctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.8);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(0,0,0,0.85)');
+  mctx.fillStyle=vig; mctx.fillRect(0,0,W,H);
+
+  // Scan lines
+  mctx.globalAlpha=0.03;
+  mctx.fillStyle='#000';
+  for (let y=0;y<H;y+=2) mctx.fillRect(0,y,W,1);
+  mctx.globalAlpha=1;
+}
+
+function menuLoop() {
+  if (gameState !== 'menu') return;
+  drawMenuBackground();
+  requestAnimationFrame(menuLoop);
+}
+
+// =====================================================
+// GAME INIT
+// =====================================================
+function initGame() {
+  buildMansion();
+
+  // Reset player
+  player.x = 15*TILE; player.y = 44*TILE;
+  player.vx = 0; player.vy = 0;
+  player.health = 100; player.battery = 100;
+  player.ammo = 0; player.hasGun = false; player.hasKey = false;
+  player.flashOn = true; player.dead = false;
+  player.invincible = 0; player.shootCooldown = 0; player.recoil = 0;
+  player.facingRight = true;
+  document.getElementById('keyIcon').style.display = 'none';
+  objectiveIdx = 0;
+  setObjective(0);
+
+  // Clear arrays
+  enemies.length = 0;
+  bullets.length = 0;
+  pickups.length = 0;
+  particles.length = 0;
+  bloodSplats.length = 0;
+
+  // Spawn enemies from map
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      const ch = getTile(tx, ty);
+      if (ch === 's') { enemies.push(new Enemy(tx, ty, 'shadow')); setTile(tx,ty,'.'); }
+      else if (ch === 'c') { enemies.push(new Enemy(tx, ty, 'crawl')); setTile(tx,ty,'.'); }
+      else if (ch === 't') { enemies.push(new Enemy(tx, ty, 'tall')); setTile(tx,ty,'.'); }
+      else if (ch === 'f') { enemies.push(new Enemy(tx, ty, 'fast')); setTile(tx,ty,'.'); }
+      else if (ch === 'm') { enemies.push(new Enemy(tx, ty, 'mimic')); setTile(tx,ty,'.'); }
+      else if (ch === 'B' || ch === 'G' || ch === 'A' || ch === 'K') {
+        pickups.push(new Pickup(tx, ty, ch));
+        setTile(tx, ty, '.');
+      }
+    }
+  }
+
+  initDust();
+  cam.x = player.x - W/2;
+  cam.y = player.y - H/2;
+
+  saveProgress();
+}
+
+// =====================================================
+// SAVE / LOAD
+// =====================================================
+function saveProgress() {
+  // Use in-memory only (localStorage blocked in artifacts)
+  window._saveData = {
+    health: player.health, battery: player.battery,
+    ammo: player.ammo, hasGun: player.hasGun, hasKey: player.hasKey,
+    x: player.x, y: player.y, objective: objectiveIdx
+  };
+}
+
+function loadProgress() {
+  const d = window._saveData;
+  if (!d) return false;
+  player.health = d.health; player.battery = d.battery;
+  player.ammo = d.ammo; player.hasGun = d.hasGun; player.hasKey = d.hasKey;
+  player.x = d.x; player.y = d.y;
+  setObjective(d.objective);
+  if (player.hasKey) document.getElementById('keyIcon').style.display='inline';
+  return true;
+}
+
+// =====================================================
+// DEATH / WIN
+// =====================================================
+function triggerDeath() {
+  gameState = 'dead';
+  addScreenFlash(1, '#8b0000');
+  cam.shake = 20;
+  saveProgress();
+  setTimeout(() => {
+    document.getElementById('gameOver').style.display = 'flex';
+    if (player.hasKey) {
+      document.getElementById('deathMsg').textContent = 'So close to freedom. The darkness claimed you.';
+    }
+  }, 800);
+}
+
+function triggerWin() {
+  if (gameState === 'win') return;
+  gameState = 'win';
+  addScreenFlash(0.8, '#ffffff');
+  setTimeout(() => {
+    document.getElementById('winScreen').style.display = 'flex';
+    window._saveData = null; // Clear save on win
+  }, 1000);
+}
+
+// =====================================================
+// INTRO SEQUENCE
+// =====================================================
+function showIntro() {
+  document.getElementById('menuScreen').style.display = 'none';
+  document.getElementById('introScreen').style.display = 'flex';
+  const l1 = document.getElementById('introLine1');
+  const l2 = document.getElementById('introLine2');
+  l1.style.opacity = '0'; l2.style.opacity = '0';
+  setTimeout(() => { l1.style.opacity = '1'; }, 300);
+  setTimeout(() => { l2.style.opacity = '1'; }, 2500);
+  setTimeout(() => {
+    document.getElementById('introScreen').style.display = 'none';
+    startGame();
+  }, 5000);
+}
+
+function startGame() {
+  buildMansion();
+  initGame();
+  gameCanvas.style.display = 'block';
+  gameState = 'playing';
+  document.getElementById('ui').style.display = 'block';
+  if (window.innerWidth <= 768) document.getElementById('mobileControls').style.display = 'block';
+  if (!audioCtx) initAudio();
+  requestAnimationFrame(gameLoop);
+}
+
+// =====================================================
+// CONTROLS
+// =====================================================
+const keys = {
+  left:false, right:false, up:false, down:false,
+  jump:false, shoot:false, flash:false, flashPrev:false,
+  pause:false
+};
+const touches = { left:false, right:false, jump:false, shoot:false, flash:false };
+
+document.addEventListener('keydown', e => {
+  initAudio();
+  if (e.code==='ArrowLeft'||e.code==='KeyA') keys.left=true;
+  if (e.code==='ArrowRight'||e.code==='KeyD') keys.right=true;
+  if (e.code==='ArrowUp'||e.code==='KeyW') keys.up=true;
+  if (e.code==='ArrowDown'||e.code==='KeyS') keys.down=true;
+  if (e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW') keys.jump=true;
+  if (e.code==='KeyZ'||e.code==='KeyX'||e.code==='KeyF') { if(e.code==='KeyF') keys.flash=true; else keys.shoot=true; }
+  if (e.code==='Escape' && gameState==='playing') togglePause();
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  if (e.code==='ArrowLeft'||e.code==='KeyA') keys.left=false;
+  if (e.code==='ArrowRight'||e.code==='KeyD') keys.right=false;
+  if (e.code==='ArrowUp'||e.code==='KeyW') { keys.up=false; keys.jump=false; }
+  if (e.code==='ArrowDown'||e.code==='KeyS') keys.down=false;
+  if (e.code==='Space') keys.jump=false;
+  if (e.code==='KeyF') keys.flash=false;
+});
+
+// Mobile touch controls
+function bindBtn(id, touchKey) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); initAudio(); touches[touchKey]=true; }, {passive:false});
+  el.addEventListener('touchend', e=>{ e.preventDefault(); if(touchKey!=='shoot'&&touchKey!=='flash') touches[touchKey]=false; }, {passive:false});
+  el.addEventListener('touchcancel', e=>{ e.preventDefault(); touches[touchKey]=false; }, {passive:false});
+}
+bindBtn('btnLeft','left');
+bindBtn('btnRight','right');
+bindBtn('btnJump','jump');
+bindBtn('btnShoot','shoot');
+bindBtn('btnFlash','flash');
+
+// Jump: release resets
+document.getElementById('btnJump').addEventListener('touchend', e=>{ e.preventDefault(); touches.jump=false; }, {passive:false});
+
+function togglePause() {
+  if (gameState==='playing') {
+    gameState='paused';
+    document.getElementById('pauseScreen').style.display='flex';
+  } else if (gameState==='paused') {
+    gameState='playing';
+    document.getElementById('pauseScreen').style.display='none';
+    lastTime = 0;
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+// =====================================================
+// BUTTON HANDLERS
+// =====================================================
+document.getElementById('btnPlay').onclick = () => { initAudio(); showIntro(); };
+document.getElementById('btnContinue').onclick = () => {
+  initAudio();
+  if (window._saveData) {
+    document.getElementById('menuScreen').style.display='none';
+    buildMansion(); initGame(); loadProgress();
+    gameCanvas.style.display='block';
+    gameState='playing';
+    if (window.innerWidth<=768) document.getElementById('mobileControls').style.display='block';
+    requestAnimationFrame(gameLoop);
+  } else {
+    alert('No saved game found. Start a new game!');
+  }
+};
+document.getElementById('btnControls').onclick = () => {
+  document.getElementById('menuButtons').style.display='none';
+  document.getElementById('controlsPanel').style.display='block';
+};
+document.getElementById('btnCredits').onclick = () => {
+  document.getElementById('menuButtons').style.display='none';
+  document.getElementById('creditsPanel').style.display='block';
+};
+document.getElementById('btnRetry').onclick = () => {
+  document.getElementById('gameOver').style.display='none';
+  buildMansion(); initGame();
+  if (window._saveData) loadProgress();
+  gameState='playing'; lastTime=0;
+  requestAnimationFrame(gameLoop);
+};
+document.getElementById('btnMenu1').onclick = () => {
+  document.getElementById('gameOver').style.display='none';
+  document.getElementById('menuScreen').style.display='flex';
+  gameState='menu'; menuLoop();
+};
+document.getElementById('btnMenuWin').onclick = () => {
+  document.getElementById('winScreen').style.display='none';
+  document.getElementById('menuScreen').style.display='flex';
+  gameState='menu'; menuLoop();
+};
+document.getElementById('btnResume').onclick = togglePause;
+document.getElementById('btnMenu2').onclick = () => {
+  document.getElementById('pauseScreen').style.display='none';
+  document.getElementById('menuScreen').style.display='flex';
+  gameState='menu'; menuLoop();
+};
+
+// =====================================================
+// START
+// =====================================================
+menuLoop();
+
+// Periodic auto-save during gameplay
+setInterval(() => { if (gameState==='playing' && !player.dead) saveProgress(); }, 10000);
+
+// Ambient horror sound loop
+setInterval(() => {
+  if (gameState !== 'playing' || !audioCtx) return;
+  const r = Math.random();
+  if (r < 0.2) soundCreak();
+  else if (r < 0.3) soundWhisper();
+  else if (r < 0.35 && player.health < 50) soundHeartbeat();
+}, 8000);
+
+</script>
+</body>
+</html>
